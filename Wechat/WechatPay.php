@@ -117,6 +117,33 @@ class WechatPay {
     }
 
     /**
+     * 创建刷卡支付参数包
+     * @param string $auth_code 授权Code号
+     * @param string $out_trade_no 商户订单号
+     * @param int $total_fee 支付费用
+     * @param string $body 订单标识
+     * @param null $goods_tag 商品标签
+     * @return array|bool
+     */
+    public function createMicroPay($auth_code, $out_trade_no, $total_fee, $body, $goods_tag = null) {
+        $data = array(
+            "appid"            => $this->appid,
+            "mch_id"           => $this->mch_id,
+            "body"             => $body,
+            "out_trade_no"     => $out_trade_no,
+            "total_fee"        => $total_fee,
+            "auth_code"        => $auth_code,
+            "spbill_create_ip" => Tools::getAddress()
+        );
+        empty($goods_tag) || $data['goods_tag'] = $goods_tag;
+        $json = Tools::xml2arr($this->postXml($data, self::MCH_BASE_URL . '/pay/micropay'));
+        if (!empty($json) && false === $this->_parseResult($json)) {
+            return false;
+        }
+        return $json;
+    }
+
+    /**
      * 支付通知验证处理
      * @return bool|array
      */
@@ -190,7 +217,7 @@ class WechatPay {
         if (false === $this->_parseResult($result)) {
             return false;
         }
-        return ($trade_type === 'JSAPI') ? $result['prepay_id'] : $result['code_url'];
+        return in_array($trade_type, array('JSAPI', 'APP')) ? $result['prepay_id'] : $result['code_url'];
     }
 
     /**
@@ -284,7 +311,7 @@ class WechatPay {
         return $result;
     }
 
-   /**
+    /**
      * 订单退款接口
      * @param string $out_trade_no 商户订单号
      * @param string $transaction_id 微信订单号
@@ -350,34 +377,49 @@ class WechatPay {
     /**
      * 发送现金红包
      * @param string $openid 红包接收者OPENID
-     * @param int $amount 红包总金额
-     * @param string $billno 商户订单号
+     * @param int $total_amount 红包总金额
+     * @param string $mch_billno 商户订单号
      * @param string $sendname 商户名称
      * @param string $wishing 红包祝福语
-     * @param string $actname 活动名称
+     * @param string $act_name 活动名称
      * @param string $remark 备注信息
-     * @return bool|array
+     * @param null|int $total_num 红包发放总人数（大于1为裂变红包）
+     * @param null|string $scene_id 场景id
+     * @param string $risk_info 活动信息
+     * @param null|string $consume_mch_id 资金授权商户号
+     * @return array|bool
      * @link  https://pay.weixin.qq.com/wiki/doc/api/tools/cash_coupon.php?chapter=13_5
      */
-    public function sendRedPack($openid, $amount, $billno, $sendname, $wishing, $actname, $remark) {
+    public function sendRedPack($openid, $total_amount, $mch_billno, $sendname, $wishing, $act_name, $remark, $total_num = 1, $scene_id = null, $risk_info = '', $consume_mch_id = null) {
         $data = array();
-        $data['mch_billno'] = $billno; // 商户订单号 mch_id+yyyymmdd+10位一天内不能重复的数字
+        $data['mch_billno'] = $mch_billno; // 商户订单号 mch_id+yyyymmdd+10位一天内不能重复的数字
         $data['wxappid'] = $this->appid;
         $data['send_name'] = $sendname; //商户名称
         $data['re_openid'] = $openid; //红包接收者
-        $data['total_amount'] = $amount; //红包金额
+        $data['total_amount'] = $total_amount; //红包总金额
         $data['total_num'] = '1'; //发放人数据
         $data['wishing'] = $wishing; //红包祝福语
         $data['client_ip'] = Tools::getAddress(); //调用接口的机器Ip地址
-        $data['act_name'] = $actname; //活动名称
+        $data['act_name'] = $act_name; //活动名称
         $data['remark'] = $remark; //备注信息
-        $result = $this->postXmlSSL($data, self::MCH_BASE_URL . '/mmpaymkttransfers/sendredpack');
+        $data['total_num'] = $total_num;
+        !empty($scene_id) && $data['scene_id'] = $scene_id;
+        !empty($risk_info) && $data['risk_info'] = $risk_info;
+        !empty($consume_mch_id) && $data['consume_mch_id'] = $consume_mch_id;
+        if ($total_num > 1) {
+            $data['amt_type'] = 'ALL_RAND';
+            $api = self::MCH_BASE_URL . '/mmpaymkttransfers/sendgroupredpack';
+        } else {
+            $api = self::MCH_BASE_URL . '/mmpaymkttransfers/sendredpack';
+        }
+        $result = $this->postXmlSSL($data, $api);
         $json = Tools::xml2arr($result);
         if (!empty($json) && false === $this->_parseResult($json)) {
             return false;
         }
         return $json;
     }
+
 
     /**
      * 现金红包状态查询
