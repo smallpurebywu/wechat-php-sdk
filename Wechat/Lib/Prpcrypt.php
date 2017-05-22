@@ -12,13 +12,15 @@ class PKCS7Encoder {
 
     /**
      * 对需要加密的明文进行填充补位
-     * @param string $text 需要进行填充补位操作的明文
-     * @return string 补齐明文字符串
+     * @param $text 需要进行填充补位操作的明文
+     * @return 补齐明文字符串
      */
     function encode($text) {
-        $amount_to_pad = PKCS7Encoder::$block_size - (strlen($text) % PKCS7Encoder::$block_size);
+        $block_size = PKCS7Encoder::$block_size;
+        $text_length = strlen($text);
+        $amount_to_pad = PKCS7Encoder::$block_size - ($text_length % PKCS7Encoder::$block_size);
         if ($amount_to_pad == 0) {
-            $amount_to_pad = PKCS7Encoder::$block_size;
+            $amount_to_pad = PKCS7Encoder::block_size;
         }
         $pad_chr = chr($amount_to_pad);
         $tmp = "";
@@ -30,8 +32,8 @@ class PKCS7Encoder {
 
     /**
      * 对解密后的明文进行补位删除
-     * @param string $text 解密后的明文
-     * @return string 删除填充补位后的明文
+     * @param decrypted 解密后的明文
+     * @return 删除填充补位后的明文
      */
     function decode($text) {
         $pad = ord(substr($text, -1));
@@ -60,39 +62,46 @@ class Prpcrypt {
     /**
      * 对明文进行加密
      * @param string $text 需要加密的明文
-     * @param string $appid 公众号APPID
      * @return string 加密后的密文
      */
     public function encrypt($text, $appid) {
         try {
-            //获得16位随机字符串，填充到明文之前
-            $random = $this->getRandomStr();//"aaaabbbbccccdddd";
+            $random = $this->getRandomStr();
             $text = $random . pack("N", strlen($text)) . $text . $appid;
+            $size = mcrypt_get_block_size(MCRYPT_RIJNDAEL_128, MCRYPT_MODE_CBC);
+            $module = mcrypt_module_open(MCRYPT_RIJNDAEL_128, '', MCRYPT_MODE_CBC, '');
             $iv = substr($this->key, 0, 16);
-            $pkc_encoder = new PKCS7Encoder;
+            $pkc_encoder = new PKCS7Encoder();
             $text = $pkc_encoder->encode($text);
-            $encrypted = openssl_encrypt($text, 'AES-256-CBC', substr($this->key, 0, 32), OPENSSL_ZERO_PADDING, $iv);
-            return array(ErrorCode::$OK, $encrypted);
+            mcrypt_generic_init($module, $this->key, $iv);
+            $encrypted = mcrypt_generic($module, $text);
+            mcrypt_generic_deinit($module);
+            mcrypt_module_close($module);
+            return array(ErrorCode::$OK, base64_encode($encrypted));
         } catch (Exception $e) {
-            return array(ErrorCode::$EncryptAESError, null);
+            return array(ErrorCode::$EncryptAESError, ErrorCode::getErrText(ErrorCode::$EncryptAESError));
         }
     }
 
     /**
      * 对密文进行解密
      * @param string $encrypted 需要解密的密文
-     * @param string $appid 公众号APPID
      * @return string 解密得到的明文
      */
     public function decrypt($encrypted, $appid) {
         try {
+            $ciphertext_dec = base64_decode($encrypted);
+            $module = mcrypt_module_open(MCRYPT_RIJNDAEL_128, '', MCRYPT_MODE_CBC, '');
             $iv = substr($this->key, 0, 16);
-            $decrypted = openssl_decrypt($encrypted, 'AES-256-CBC', substr($this->key, 0, 32), OPENSSL_ZERO_PADDING, $iv);
+            mcrypt_generic_init($module, $this->key, $iv);
+            $decrypted = mdecrypt_generic($module, $ciphertext_dec);
+            mcrypt_generic_deinit($module);
+            mcrypt_module_close($module);
         } catch (Exception $e) {
-            return array(ErrorCode::$DecryptAESError, null);
+            return array(ErrorCode::$DecryptAESError, ErrorCode::getErrText(ErrorCode::$DecryptAESError));
         }
         try {
-            $pkc_encoder = new PKCS7Encoder;
+            $pkc_encoder = new PKCS7Encoder();
             $result = $pkc_encoder->decode($decrypted);
             if (strlen($result) < 16) {
                 return "";
@@ -106,7 +115,7 @@ class Prpcrypt {
                 $appid = $from_appid;
             }
         } catch (Exception $e) {
-            return array(ErrorCode::$IllegalBuffer, null);
+            return array(ErrorCode::$IllegalBuffer, ErrorCode::getErrText(ErrorCode::$IllegalBuffer));
         }
         return array(0, $xml_content, $from_appid);
     }
@@ -128,9 +137,10 @@ class Prpcrypt {
 }
 
 /**
- * 仅用作类内部使用
- * 不用于官方API接口的errCode码
- * Class ErrorCode
+ * 仅用作类内部使用，不用于官方API接口的errCode码
+ * @category WechatSDK
+ * @subpackage library
+ * @date 2016/06/28 11:59
  */
 class ErrorCode {
 
@@ -163,14 +173,15 @@ class ErrorCode {
 
     /**
      * 获取错误消息内容
-     * @param string $err
+     * @param type $err
      * @return bool
      */
     public static function getErrText($err) {
         if (isset(self::$errCode[$err])) {
             return self::$errCode[$err];
+        } else {
+            return false;
         }
-        return false;
     }
 
 }

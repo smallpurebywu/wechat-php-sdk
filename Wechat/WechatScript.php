@@ -4,6 +4,7 @@ namespace Wechat;
 
 use Wechat\Lib\Common;
 use Wechat\Lib\Tools;
+use Wechat\Loader;
 
 /**
  * 微信前端 JavaScript 签名SDK
@@ -112,9 +113,6 @@ class WechatScript extends Common {
                 'translateVoice', 'getNetworkType', 'openLocation', 'getLocation',
                 'openProductSpecificView', 'addCard', 'chooseCard', 'openCard',
                 'startRecord', 'stopRecord', 'onVoiceRecordEnd', 'playVoice', 'pauseVoice', 'stopVoice', 'onVoicePlayEnd', 'uploadVoice', 'downloadVoice',
-                'openWXDeviceLib', 'closeWXDeviceLib', 'getWXDeviceInfos', 'sendDataToWXDevice', 'disconnectWXDevice', 'getWXDeviceTicket', 'connectWXDevice',
-                'startScanWXDevice', 'stopScanWXDevice', 'onWXDeviceBindStateChange', 'onScanWXDeviceResult', 'onReceiveDataFromWXDevice',
-                'onWXDeviceBluetoothStateChange', 'onWXDeviceStateChange'
             )
         );
     }
